@@ -1,0 +1,44 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend {
+        # Primary server (based on ACTIVE_POOL)
+        server app_${ACTIVE_POOL}:3000 max_fails=2 fail_timeout=5s;
+        
+        # Backup server (automatically fails over)
+        server app_green:3000 backup;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://backend;
+            
+            # Timeout settings for fast failure detection
+            proxy_connect_timeout 2s;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 2s;
+            
+            # Retry on errors
+            proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+            proxy_next_upstream_tries 2;
+            
+            # Forward application headers
+            proxy_pass_request_headers on;
+            
+            # Preserve upstream headers
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location /healthz {
+            proxy_pass http://backend/healthz;
+            proxy_connect_timeout 1s;
+            proxy_read_timeout 1s;
+        }
+    }
+}
