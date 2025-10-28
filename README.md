@@ -528,7 +528,7 @@ This project is for educational purposes as part of the HNG DevOps Internship St
 
 ## Author
 
-**Your Name**  
+**Temitope Joseph**  
 HNG DevOps Internship - Stage 2  
 October 28, 2025
 
