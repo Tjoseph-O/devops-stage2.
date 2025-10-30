@@ -7,7 +7,6 @@ for failover events and high error rates.
 import os
 import re
 import time
-import subprocess
 import requests
 from collections import deque
 from datetime import datetime
@@ -81,8 +80,7 @@ def send_slack_alert(message, alert_type="info"):
             print(f"✅ Slack alert sent: {alert_type}")
             return True
         else:
-            print(f"❌ Slack alert failed: HTTP {response.status_code}")
-            print(f"   Response: {response.text[:100]}")
+            print(f"❌ Slack alert failed: {response.status_code}")
             return False
     except Exception as e:
         print(f"❌ Error sending Slack alert: {e}")
@@ -118,8 +116,8 @@ def check_failover(pool):
         
         send_slack_alert(message, "failover")
         last_failover_alert = current_time
-        print(f"🔄 FAILOVER: {last_pool} → {pool}")
         last_pool = pool
+        print(f"🔄 FAILOVER: {last_pool} → {pool}")
 
 def check_error_rate():
     """Check if error rate exceeds threshold"""
@@ -189,25 +187,16 @@ def tail_log_file():
         print(f"⏳ Waiting for log file to be created...")
         time.sleep(2)
     
-    print(f"✅ Log file found, starting to monitor...")
-    
-    # Use tail command to follow log file (more reliable than file.seek)
-    try:
-        process = subprocess.Popen(
-            ['tail', '-F', '-n', '0', LOG_FILE],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-            bufsize=1
-        )
+    # Open log file and seek to end
+    with open(LOG_FILE, 'r') as f:
+        # Go to end of file
+        f.seek(0, 2)
         
-        # Process each line as it comes
-        for line in iter(process.stdout.readline, ''):
-            if not line:
-                continue
+        while True:
+            line = f.readline()
             
-            line = line.strip()
             if not line:
+                time.sleep(0.1)  # Wait for new lines
                 continue
             
             # Parse log line
@@ -228,14 +217,6 @@ def tail_log_file():
             
             # Check error rate
             check_error_rate()
-            
-    except Exception as e:
-        print(f"❌ Error in tail_log_file: {e}")
-        raise
-    finally:
-        if 'process' in locals():
-            process.terminate()
-            process.wait()
 
 def main():
     """Main entry point"""
@@ -245,8 +226,6 @@ def main():
     
     if not SLACK_WEBHOOK_URL:
         print("⚠️  WARNING: SLACK_WEBHOOK_URL not set. Alerts will only print to console.")
-    else:
-        print(f"✅ Slack webhook configured: {SLACK_WEBHOOK_URL[:50]}...")
     
     # Send startup notification
     send_slack_alert(
@@ -264,8 +243,6 @@ def main():
         print("\n👋 Log watcher stopped by user")
     except Exception as e:
         print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
         send_slack_alert(f"*Log Watcher Error*\n\n```{str(e)}```", "error")
 
 if __name__ == "__main__":
